@@ -1,0 +1,15 @@
+# 로컬 개발 프로파일
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/miniproject1_db}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+logging:
+  level:
+    org.hibernate.SQL: debug

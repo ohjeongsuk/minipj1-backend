@@ -1,0 +1,47 @@
+# 공통 설정. 프로파일별 설정은 application-local.yml / application-test.yml 에 둔다.
+spring:
+  application:
+    name: minipj1-backend
+
+  # 프로파일을 지정하지 않고 기동해도 동작해야 한다
+  profiles:
+    active: local
+
+  # .env 를 properties 형식으로 읽는다. 파일이 없어도 기동에 실패하지 않는다(optional).
+  # 주의: .properties 문법이므로 값 뒤 인라인 주석(#)은 값에 포함된다. 주석은 줄 단위로 쓴다.
+  config:
+    import: optional:file:.env[.properties]
+
+  jpa:
+    properties:
+      hibernate:
+        # 타임존은 UTC 로 고정한다. created_at/updated_at/deleted_at 이 대상이다.
+        jdbc:
+          time_zone: UTC
+        format_sql: true
+    open-in-view: false
+
+  # flyway-core 가 클래스패스에 있어 자동 구성되지만,
+  # 이 프로젝트의 스키마 소유권은 ddl-auto + db/schema-extra.sql 에 있다. 둘이 충돌하므로 끈다.
+  flyway:
+    enabled: false
+
+  servlet:
+    multipart:
+      # CSV 업로드 상한 (Phase 6 대비). 기본값 1MB 라 명시하지 않으면 조용히 413 이 날 수 있다.
+      max-file-size: 1MB
+      max-request-size: 2MB
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+
+# CORS 허용 오리진 (쉼표로 구분된 목록)
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:86400000}

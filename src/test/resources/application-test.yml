@@ -1,0 +1,30 @@
+# 테스트 프로파일. H2 를 쓰지 않고 로컬 PostgreSQL 의 miniproject1_test 를 그대로 쓴다.
+# 집계에 LOWER(...) LIKE, COALESCE, NUMERIC 반올림 등 PostgreSQL 동작에 의존하기 때문이다.
+spring:
+  config:
+    import: optional:file:.env[.properties]
+
+  datasource:
+    url: ${DB_URL_TEST:jdbc:postgresql://localhost:5432/miniproject1_test}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+    show-sql: false
+
+  flyway:
+    enabled: false
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000
+  jwt:
+    # 테스트 전용 더미 시크릿. raw UTF-8 32자 이상이어야 WeakKeyException 이 나지 않는다.
+    secret: test-secret-key-for-junit-only-32bytes-minimum
+    expiration: 86400000
