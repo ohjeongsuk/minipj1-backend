@@ -5,6 +5,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -53,6 +54,18 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleIllegalArgument(IllegalArgumentException e) {
         log.warn("잘못된 인자: {}", e.getMessage());
         return build(ErrorCode.INVALID_INPUT, ErrorCode.INVALID_INPUT.getMessage());
+    }
+
+    /**
+     * 요청 본문을 읽을 수 없는 경우 (JSON 문법 오류, 잘못된 인코딩, 타입 불일치).
+     * 클라이언트가 보낸 요청의 문제이므로 500 이 아니라 400 이다.
+     * 매핑이 없으면 catch-all 이 삼켜 INTERNAL_ERROR 로 나가고,
+     * 프론트 개발자가 서버 장애로 오인한다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
+        log.warn("요청 본문을 읽을 수 없음: {}", e.getMessage());
+        return build(ErrorCode.INVALID_INPUT, "요청 본문의 형식이 올바르지 않습니다.");
     }
 
     /** 없는 API 경로. catch-all 보다 먼저 잡아야 500 으로 흘러가지 않는다 */
