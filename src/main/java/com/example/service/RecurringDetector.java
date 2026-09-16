@@ -52,12 +52,25 @@ public final class RecurringDetector {
                 .replaceAll("[\\s()\\[\\]{}0-9]", "");
     }
 
-    /**
-     * @param candidates  스캔 구간의 거래들 (merchant 가 비어 있는 건은 호출자가 걸러도 되고 여기서 걸러도 된다)
-     * @param scanMonths  검사할 개월들. 모든 달에 1건 이상 있어야 감지된다
-     */
+    /** 스캔 구간과 필수 개월이 같은 경우. 단위 테스트가 주로 쓴다 */
     public static List<Detected> detect(List<Candidate> candidates, Set<YearMonth> scanMonths) {
-        if (scanMonths.isEmpty()) {
+        return detect(candidates, scanMonths, scanMonths);
+    }
+
+    /**
+     * @param candidates     스캔 구간의 거래들 (merchant 가 비어 있는 건은 호출자가 걸러도 되고 여기서 걸러도 된다)
+     * @param scanMonths     집계에 넣을 개월들. 중앙값과 ±10% 판정이 이 범위를 쓴다
+     * @param requiredMonths 반드시 1건 이상 있어야 하는 개월들. scanMonths 의 부분집합이다
+     *
+     * ⚠️ 스캔 구간과 필수 개월을 나눈 것이 이 메서드의 요점이다.
+     *    당월을 필수로 만들면 매달 1일부터 결제일 사이에는 아직 결제가 없어
+     *    목록이 통째로 비었다가 결제가 들어오면 다시 나타난다. 사용자에게는 고장으로 보인다.
+     *    당월은 집계에만 넣고 존재 여부는 묻지 않는다.
+     */
+    public static List<Detected> detect(List<Candidate> candidates,
+                                        Set<YearMonth> scanMonths,
+                                        Set<YearMonth> requiredMonths) {
+        if (scanMonths.isEmpty() || requiredMonths.isEmpty()) {
             return List.of();
         }
 
@@ -71,7 +84,7 @@ public final class RecurringDetector {
 
         List<Detected> result = new ArrayList<>();
         for (List<Candidate> group : grouped.values()) {
-            Detected detected = evaluate(group, scanMonths);
+            Detected detected = evaluate(group, scanMonths, requiredMonths);
             if (detected != null) {
                 result.add(detected);
             }
@@ -81,14 +94,17 @@ public final class RecurringDetector {
         return result;
     }
 
-    private static Detected evaluate(List<Candidate> group, Set<YearMonth> scanMonths) {
+    private static Detected evaluate(List<Candidate> group,
+                                     Set<YearMonth> scanMonths,
+                                     Set<YearMonth> requiredMonths) {
         Set<YearMonth> seen = group.stream()
                 .map(c -> YearMonth.from(c.txnDate()))
                 .filter(scanMonths::contains)
                 .collect(Collectors.toSet());
 
-        // 스캔 구간의 모든 달에 1건 이상 있어야 한다. 2개월만 있는 상호는 제외된다.
-        if (!seen.containsAll(scanMonths)) {
+        // 필수 개월에는 전부 1건 이상 있어야 한다. 2개월만 있는 상호는 제외된다.
+        // 당월처럼 필수가 아닌 달은 있으면 집계에 더해지고 없어도 탈락시키지 않는다.
+        if (!seen.containsAll(requiredMonths)) {
             return null;
         }
 

@@ -18,9 +18,14 @@ import com.example.service.RecurringDetector.Detected;
 
 class RecurringDetectorTest {
 
-    /** asOf 가 2026-09 일 때의 스캔 구간 (당월 제외 직전 3개월) */
+    /** asOf 가 2026-09 일 때의 필수 개월 (직전 3개월) */
     private static final Set<YearMonth> SCAN = Set.of(
             YearMonth.of(2026, 6), YearMonth.of(2026, 7), YearMonth.of(2026, 8));
+
+    /** 실제 서비스가 쓰는 스캔 구간 — 필수 3개월 + 당월 */
+    private static final Set<YearMonth> SCAN_WITH_CURRENT = Set.of(
+            YearMonth.of(2026, 6), YearMonth.of(2026, 7), YearMonth.of(2026, 8),
+            YearMonth.of(2026, 9));
 
     @Nested
     @DisplayName("상호 정규화")
@@ -92,6 +97,62 @@ class RecurringDetectorTest {
             assertThat(netflix.medianAmount()).isEqualByComparingTo("17000.00");
             assertThat(netflix.monthsSeen()).isEqualTo(3);
             assertThat(netflix.lastDate()).isEqualTo(LocalDate.of(2026, 8, 5));
+        }
+
+        @Test
+        @DisplayName("당월에 결제가 아직 없어도 직전 3개월이 채워졌으면 감지된다")
+        void 당월이_비어도_감지된다() {
+            // 매달 5일 결제인데 아직 9월 3일이라 당월 건이 없는 상황
+            List<Candidate> candidates = List.of(
+                    candidate("넷플릭스", 1L, "17000", "2026-06-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-07-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-08-05"));
+
+            List<Detected> result =
+                    RecurringDetector.detect(candidates, SCAN_WITH_CURRENT, SCAN);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).monthsSeen()).isEqualTo(3);
+            assertThat(result.get(0).lastDate()).isEqualTo(LocalDate.of(2026, 8, 5));
+        }
+
+        @Test
+        @DisplayName("당월 결제가 들어오면 monthsSeen 과 lastDate 에 반영된다")
+        void 당월_결제가_반영된다() {
+            List<Candidate> candidates = List.of(
+                    candidate("넷플릭스", 1L, "17000", "2026-06-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-07-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-08-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-09-05"));
+
+            List<Detected> result =
+                    RecurringDetector.detect(candidates, SCAN_WITH_CURRENT, SCAN);
+
+            assertThat(result).hasSize(1);
+            assertThat(result.get(0).monthsSeen()).isEqualTo(4);
+            assertThat(result.get(0).lastDate()).isEqualTo(LocalDate.of(2026, 9, 5));
+        }
+
+        @Test
+        @DisplayName("당월 금액이 중앙값 ±10% 를 벗어나면 목록에서 빠진다")
+        void 당월_금액이_어긋나면_빠진다() {
+            // 구독료가 크게 오르면 더 이상 "금액이 고정된 지출" 이 아니다
+            List<Candidate> candidates = List.of(
+                    candidate("넷플릭스", 1L, "17000", "2026-06-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-07-05"),
+                    candidate("넷플릭스", 1L, "17000", "2026-08-05"),
+                    candidate("넷플릭스", 1L, "25000", "2026-09-05"));
+
+            assertThat(RecurringDetector.detect(candidates, SCAN_WITH_CURRENT, SCAN)).isEmpty();
+        }
+
+        @Test
+        @DisplayName("당월에만 있는 상호는 직전 3개월이 비어 감지되지 않는다")
+        void 당월에만_있으면_제외된다() {
+            List<Candidate> candidates = List.of(
+                    candidate("새로시작한구독", 1L, "9900", "2026-09-05"));
+
+            assertThat(RecurringDetector.detect(candidates, SCAN_WITH_CURRENT, SCAN)).isEmpty();
         }
 
         @Test
