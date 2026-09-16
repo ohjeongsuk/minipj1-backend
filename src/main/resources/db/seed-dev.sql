@@ -89,10 +89,14 @@ SELECT u.id,
        now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC'
 FROM generate_series(1, 380) AS i
 CROSS JOIN users u
+-- ⚠️ LATERAL 서브쿼리는 좌측의 i 를 참조해야 행마다 재평가된다.
+--    u.id 만 참조하면 상관관계가 없어 PostgreSQL 이 한 번만 평가하고 결과를 재사용한다.
+--    ORDER BY random() 이 있어도 마찬가지라, 2만 건이 전부 같은 카테고리에 들어간다.
 CROSS JOIN LATERAL (
     SELECT id FROM categories
-    WHERE user_id = u.id AND type = 'EXPENSE'
-    ORDER BY random() LIMIT 1
+    WHERE user_id = u.id AND type = 'EXPENSE' AND deleted_at IS NULL
+    ORDER BY sort_order
+    OFFSET (i % 7) LIMIT 1
 ) AS c
 WHERE u.email = 'dev@moneylog.local';
 
