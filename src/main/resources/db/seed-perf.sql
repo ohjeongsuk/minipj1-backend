@@ -34,10 +34,14 @@ SELECT u.id,
        now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC'
 FROM generate_series(1, 20000) AS i
 CROSS JOIN users u
+-- ⚠️ LATERAL 서브쿼리는 좌측의 i 를 참조해야 행마다 재평가된다.
+--    참조하지 않으면 PostgreSQL 이 한 번만 평가해 2만 건이 전부 같은 카테고리에 들어가고,
+--    카테고리별 집계 성능 측정이 무의미해진다. OFFSET (i % 9) 로 상관 서브쿼리를 만든다.
 CROSS JOIN LATERAL (
     SELECT id, type FROM categories
     WHERE user_id = u.id AND deleted_at IS NULL
-    ORDER BY random() LIMIT 1
+    ORDER BY sort_order
+    OFFSET (i % 9) LIMIT 1
 ) AS c
 WHERE u.email = 'dev@moneylog.local';
 
