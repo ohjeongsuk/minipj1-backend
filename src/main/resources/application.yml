@@ -32,6 +32,21 @@ spring:
       max-file-size: 1MB
       max-request-size: 2MB
 
+  # 구글 로그인 (AUTH-09). 값이 비어 있으면 구글 버튼만 동작하지 않고 나머지는 정상 기동한다.
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID:}
+            client-secret: ${GOOGLE_CLIENT_SECRET:}
+            # 구글이 실제로 돌려보내는 주소는 /login/oauth2/code/google 이다.
+            # Google Cloud Console 의 승인된 리디렉션 URI 에 이 주소(백엔드 8080)를 등록해야 한다.
+            scope:
+              - openid
+              - email
+              - profile
+
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -45,3 +60,7 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     expiration: ${JWT_EXPIRATION:86400000}
+  oauth2:
+    # 구글 인증이 끝난 뒤 돌아갈 프론트 주소. 토큰은 여기에 #token=... 로 붙는다.
+    # 코드에 하드코딩하지 않는다.
+    redirect-uri: ${OAUTH2_REDIRECT_URI:http://localhost:3000/oauth/callback}

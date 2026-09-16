@@ -12,4 +12,7 @@ public interface UserRepository extends JpaRepository<User, Long> {
     Optional<User> findByIdAndDeletedAtIsNull(Long id);
 
     boolean existsByEmailAndDeletedAtIsNull(String email);
+
+    /** 구글 재로그인 경로. 이메일이 바뀌어도 sub 는 고정이므로 sub 로 찾는다 */
+    Optional<User> findByProviderAndProviderIdAndDeletedAtIsNull(AuthProvider provider, String providerId);
 }

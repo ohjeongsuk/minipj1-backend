@@ -29,6 +29,8 @@ public enum ErrorCode {
 
     // 409
     EMAIL_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
+    /** 구글 로그인인데 같은 이메일의 로컬 계정이 이미 있다. 자동 연동하지 않는다 (AUTH-09) */
+    EMAIL_CONFLICT(HttpStatus.CONFLICT, "이미 이메일로 가입된 계정입니다. 비밀번호로 로그인해 주세요."),
     CATEGORY_DUPLICATED(HttpStatus.CONFLICT, "이미 존재하는 카테고리 이름입니다."),
 
     // 500
