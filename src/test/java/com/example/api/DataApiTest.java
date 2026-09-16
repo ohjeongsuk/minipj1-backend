@@ -253,6 +253,44 @@ class DataApiTest extends ApiTestSupport {
                 .andExpect(jsonPath("$.data.failed").value(0));
     }
 
+    // ---------- Phase 12 검증에서 발견한 누락 ----------
+
+    /**
+     * ⚠️ 미인증 상태로는 재현되지 않는다. Security 필터가 먼저 401 로 막아
+     *    컨트롤러까지 가지 않으므로 반드시 토큰을 넣고 확인한다.
+     *
+     * ⚠️ 프론트는 FormData 를 쓰므로 화면에서는 이 경로를 밟지 않는다.
+     *    그래서 Phase 12 의 실제 호출 검증 전까지 드러나지 않았다.
+     */
+    @Test
+    @DisplayName("multipart 가 아닌 Content-Type 으로 가져오기를 부르면 500 이 아니라 415 다")
+    void multipart_아닌_요청은_415() throws Exception {
+        mockMvc.perform(post(IMPORT)
+                        .header("Authorization", auth)
+                        .contentType(MediaType.TEXT_PLAIN)
+                        .content("날짜,구분,카테고리,금액,거래처,메모"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.error.code").value("UNSUPPORTED_MEDIA_TYPE"));
+    }
+
+    @Test
+    @DisplayName("415 응답도 ApiResponse 봉투를 지킨다")
+    void 오류_응답이_봉투를_지킨다() throws Exception {
+        String body = mockMvc.perform(post(IMPORT)
+                        .header("Authorization", auth)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+
+        JsonNode node = objectMapper.readTree(body);
+        assertThat(node.has("success")).isTrue();
+        assertThat(node.has("data")).isTrue();
+        assertThat(node.has("error")).isTrue();
+        assertThat(node.get("data").isNull()).isTrue();
+    }
+
     // ---------- 헬퍼 ----------
 
     private byte[] exportBytes() throws Exception {

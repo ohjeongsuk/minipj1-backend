@@ -27,6 +27,10 @@ public enum ErrorCode {
     // 405
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
 
+    // 415
+    /** multipart 를 받는 엔드포인트에 다른 Content-Type 으로 들어온 경우 */
+    UNSUPPORTED_MEDIA_TYPE(HttpStatus.UNSUPPORTED_MEDIA_TYPE, "지원하지 않는 Content-Type 입니다."),
+
     // 409
     EMAIL_DUPLICATED(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     /** 구글 로그인인데 같은 이메일의 로컬 계정이 이미 있다. 자동 연동하지 않는다 (AUTH-09) */
