@@ -28,3 +28,19 @@ ALTER TABLE transactions ADD CONSTRAINT ck_transactions_amount_positive CHECK (a
 
 ALTER TABLE budgets DROP CONSTRAINT IF EXISTS ck_budgets_amount_positive;
 ALTER TABLE budgets ADD CONSTRAINT ck_budgets_amount_positive CHECK (amount > 0);
+
+-- 3) 구글 로그인 (AUTH-09)
+--    ddl-auto: update 는 기존 행이 있는 테이블에 NOT NULL 컬럼을 붙이지 못한다.
+--    DEFAULT 를 함께 줘야 하므로 여기에 직접 적는다.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider    VARCHAR(20) NOT NULL DEFAULT 'LOCAL';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS provider_id VARCHAR(255);
+
+--    구글 계정에는 비밀번호가 없다. 랜덤 해시를 채우면 "비밀번호가 있는 계정"처럼 보여
+--    로그인 경로가 헷갈린다. NULL 을 허용하고 provider 로 분기한다.
+ALTER TABLE users ALTER COLUMN password DROP NOT NULL;
+
+--    같은 구글 계정이 두 번 가입되지 않게 한다. 로컬 계정은 provider_id 가 NULL 이라 제외된다.
+DROP INDEX IF EXISTS uq_users_provider;
+CREATE UNIQUE INDEX uq_users_provider
+    ON users (provider, provider_id)
+    WHERE provider_id IS NOT NULL;
