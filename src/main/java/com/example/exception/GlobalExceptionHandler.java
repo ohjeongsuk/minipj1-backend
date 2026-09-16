@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -90,6 +91,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
     public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException e) {
         return build(ErrorCode.METHOD_NOT_ALLOWED, ErrorCode.METHOD_NOT_ALLOWED.getMessage());
+    }
+
+    /**
+     * 지원하지 않는 Content-Type. 위 둘과 같은 이유로 명시적으로 잡는다.
+     *
+     * ⚠️ multipart 를 받는 /data/import 에서 드러난다. 프론트는 FormData 를 쓰므로
+     *    화면에서는 재현되지 않지만, 잘못된 Content-Type 이 들어오면 catch-all 이 삼켜
+     *    500 으로 나간다. 클라이언트 잘못을 서버 오류로 보고하면 오류 모니터링이 오염된다.
+     */
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e) {
+        return build(ErrorCode.UNSUPPORTED_MEDIA_TYPE, ErrorCode.UNSUPPORTED_MEDIA_TYPE.getMessage());
     }
 
     /** 최후의 방어선. 스택트레이스와 내부 메시지는 클라이언트에 노출하지 않는다 */
