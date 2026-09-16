@@ -11,6 +11,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import com.example.dto.ApiResponse;
@@ -66,6 +67,17 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleNotReadable(HttpMessageNotReadableException e) {
         log.warn("요청 본문을 읽을 수 없음: {}", e.getMessage());
         return build(ErrorCode.INVALID_INPUT, "요청 본문의 형식이 올바르지 않습니다.");
+    }
+
+    /**
+     * 업로드 파일이 multipart 상한을 넘은 경우.
+     * 매핑이 없으면 Spring 기본 응답(413)이 그대로 나가 ApiResponse 포맷이 깨지고,
+     * 사용자는 "왜 안 되는지" 알 수 없다. 우리 에러 코드로 바꿔 사유를 알린다.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        log.warn("업로드 용량 초과: {}", e.getMessage());
+        return build(ErrorCode.INVALID_CSV, "파일이 너무 큽니다. 1MB 이하만 올릴 수 있습니다.");
     }
 
     /** 없는 API 경로. catch-all 보다 먼저 잡아야 500 으로 흘러가지 않는다 */

@@ -1,6 +1,7 @@
 package com.example.domain;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.domain.Page;
@@ -24,6 +25,24 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long> 
             where t.id = :id and t.user.id = :userId and t.deletedAt is null
             """)
     Optional<Transaction> findDetail(@Param("id") Long id, @Param("userId") Long userId);
+
+    /**
+     * CSV 내보내기용. 범위 전체를 날짜 오름차순으로 읽는다.
+     * 엑셀에서 보기 자연스럽고, 왕복 검증 시 순서가 고정된다.
+     * 카테고리 이름이 필요하므로 fetch join 한다(삭제된 카테고리도 포함).
+     */
+    @Query("""
+            select t from Transaction t
+            join fetch t.category
+            where t.user.id = :userId
+              and t.deletedAt is null
+              and t.txnDate >= coalesce(:from, t.txnDate)
+              and t.txnDate <= coalesce(:to, t.txnDate)
+            order by t.txnDate asc, t.id asc
+            """)
+    List<Transaction> findForExport(@Param("userId") Long userId,
+                                    @Param("from") LocalDate from,
+                                    @Param("to") LocalDate to);
 
     /**
      * 목록 조회. 필터는 전부 선택이며 null 이면 조건에서 빠진다.
