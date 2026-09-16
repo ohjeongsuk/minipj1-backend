@@ -93,10 +93,19 @@ com.example
 **H2를 쓰지 않는다.** 로컬 PostgreSQL의 `miniproject1_test`를 그대로 쓴다.
 
 ```java
+// ⚠️ Spring Boot 4 는 테스트 슬라이스 애노테이션의 패키지를 옮겼다.
+//    Boot 3 예제를 그대로 옮기면 "cannot find symbol" 로 컴파일에 실패한다.
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)  // 임베디드 DB 교체 방지
 @ActiveProfiles("test")
+@Sql(scripts = "classpath:db/schema-extra.sql")   // create-drop 이라 제약을 매번 다시 건다
 ```
+
+- Repository 테스트는 `RepositoryTestSupport` 를 상속하면 위 네 애노테이션이 함께 적용된다.
+- **`db/schema-extra.sql` 은 멱등하게 유지한다.** `@Sql` 은 테스트 메서드마다 실행된다.
 
 - `@EnableJpaAuditing`은 **메인 애플리케이션 클래스**에 붙인다. `@Configuration`에 두면 `@DataJpaTest`가 로드하지 않아 `created_at`이 null이 된다.
 - 예측·집계 로직과 CSV 파서는 **DB 없이 순수 단위 테스트**로 검증한다.

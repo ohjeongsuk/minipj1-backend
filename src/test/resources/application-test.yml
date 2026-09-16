@@ -16,6 +16,8 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        # N+1 검증에 쓴다. Statistics 로 쿼리 수를 세려면 켜져 있어야 한다.
+        generate_statistics: true
     show-sql: false
 
   flyway:
