@@ -83,20 +83,32 @@ public class StatsService {
     @Transactional(readOnly = true)
     public List<RecurringResponse> recurring(Long userId, LocalDate asOf) {
         YearMonth current = YearMonth.from(asOf);
-        Set<YearMonth> scanMonths = new java.util.LinkedHashSet<>();
-        for (int i = 1; i <= ForecastCalculator.BASIS_MONTHS; i++) {
-            scanMonths.add(current.minusMonths(i));
+
+        /*
+         * 필수 개월은 직전 3개월이고, 당월은 집계에만 더한다.
+         *
+         * ⚠️ 당월을 필수로 만들면 매달 1일부터 결제일 사이에는 아직 결제가 없어
+         *    목록이 통째로 비었다가 결제가 들어오면 다시 나타난다. 고장으로 보인다.
+         *    필수를 직전 3개월로 두면 목록이 달 내내 안정적이고, 당월 결제는
+         *    들어오는 대로 monthsSeen(3 또는 4)과 lastDate 에 반영된다.
+         */
+        Set<YearMonth> requiredMonths = new java.util.LinkedHashSet<>();
+        for (int i = ForecastCalculator.BASIS_MONTHS; i >= 1; i--) {
+            requiredMonths.add(current.minusMonths(i));
         }
+        Set<YearMonth> scanMonths = new java.util.LinkedHashSet<>(requiredMonths);
+        scanMonths.add(current);
 
         LocalDate from = current.minusMonths(ForecastCalculator.BASIS_MONTHS).atDay(1);
-        LocalDate to = current.minusMonths(1).atEndOfMonth();
+        // 당월의 상한은 달 끝이 아니라 asOf 다. 아직 오지 않은 날짜로 입력된 거래를 세지 않는다
+        LocalDate to = asOf;
 
         List<RecurringDetector.Candidate> candidates =
                 statsRepository.findRecurringCandidates(userId, from, to).stream()
                         .map(this::toCandidate)
                         .toList();
 
-        return RecurringDetector.detect(candidates, scanMonths).stream()
+        return RecurringDetector.detect(candidates, scanMonths, requiredMonths).stream()
                 .map(RecurringResponse::from)
                 .toList();
     }
