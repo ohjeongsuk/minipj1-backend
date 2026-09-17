@@ -1,6 +1,6 @@
 # minipj1-backend
 
-머니로그(MoneyLog) 백엔드. Spring Boot 4.1.1 + JDK 21 + PostgreSQL.
+잔고(Zango) 백엔드. Spring Boot 4.1.1 + JDK 21 + PostgreSQL.
 
 > **전체 스펙의 정본은 부모 저장소의 `mini-project/CLAUDE.md`다.**
 > Claude Code는 상위 디렉토리를 거슬러 올라가며 `CLAUDE.md`를 로드하므로,
