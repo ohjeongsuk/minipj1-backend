@@ -5,7 +5,7 @@
 > 전체 스펙의 정본은 문서 저장소 `mini-project/CLAUDE.md` 다.
 > 이 저장소 전용 규칙은 `CLAUDE.md`(같은 폴더)에 있다.
 
-`v1.0.0` · 테스트 **152건 통과**
+`v1.0.0` · 테스트 **202건 통과**
 
 ---
 
@@ -14,7 +14,7 @@
 ```bash
 cp .env.example .env        # 값을 채운다
 ./mvnw spring-boot:run      # http://localhost:8080
-./mvnw test                 # 152건
+./mvnw test                 # 202건
 ```
 
 | 목적 | Git Bash | PowerShell / cmd |
@@ -102,9 +102,12 @@ Base path `/api/v1`. **`GET /data/export` 하나를 뺀 모든 응답이 아래 
 | `StatsController` | `GET /stats/monthly?yearMonth=&asOf=` · `GET /stats/recurring?asOf=` |
 | `BudgetController` | `GET /budgets?yearMonth=` · `PUT /budgets` (upsert) |
 | `DataController` | `GET /data/export` · `POST /data/import` |
+| `ChatController` | `POST /chat` — 자연어 조회 (조회 전용) |
 
 - 대시보드 집계는 **엔드포인트 하나로 묶었다.** 다섯으로 쪼개면 같은 테이블을 5번 스캔하고, 각각 따로 만료되어 화면 안에서 숫자가 어긋나는 순간이 생긴다.
 - **소유권 불일치는 403 이 아니라 404 다.** 존재 여부를 노출하지 않기 위해서다.
+- **`POST /chat` 은 의도를 못 찾아도 4xx 가 아니라 200 + `UNKNOWN` 이다.** 사용자가 예상 밖으로 물어본 것은
+  클라이언트 잘못도 서버 오류도 아니다. 4xx 로 만들면 프론트의 에러 경로를 타서 예시 질문을 보여줄 수 없다.
 
 ---
 
@@ -113,11 +116,12 @@ Base path `/api/v1`. **`GET /data/export` 하나를 뺀 모든 응답이 아래 
 ```
 src/main/java/com/example/
 ├── config/      (11) Security · JWT · CORS · Swagger · OAuth2
-├── controller/  (6)  REST 엔드포인트
+├── controller/  (7)  REST 엔드포인트
 ├── domain/      (13) 엔티티 · Repository
 ├── dto/         (19) 요청/응답 record
 ├── exception/   (3)  BusinessException · ErrorCode · GlobalExceptionHandler
 └── service/     (13) 비즈니스 로직 · 집계/예측 · CSV
+    └── chat/    (4)  자연어 의도 파서 · 응답 조립
 ```
 
 계층은 `controller → service → repository` 다. 컨트롤러가 리포지토리를 직접 호출하지 않는다.
@@ -135,6 +139,11 @@ src/main/java/com/example/
 - **거래 목록은 `join fetch t.category`.** LAZY 로 두기만 하면 20건에 조회 20번이 더 나간다.
 - **정렬에 `id DESC` 를 항상 2차 키로 덧붙인다.** `txnDate` 가 같은 거래가 흔해 페이지네이션에서 중복·누락이 난다.
 - **내보내기 CSV 맨 앞에 UTF-8 BOM(`EF BB BF`)을 쓴다.** 없으면 엑셀이 CP949 로 읽어 한글이 전부 깨진다. VS Code 에서는 멀쩡해 보여 발견되지 않는다.
+- **챗봇 의도는 구체적인 것부터 판정한다.** 고정지출 → 예산 → 예측 → 일별 → 카테고리 → 최근내역 → 월요약.
+  `"고정지출 뭐 있어"` 에는 `지출` 이, `"예상 지출 얼마야"` 에는 `지출`·`얼마` 가 들어 있어
+  순서를 뒤집으면 좁은 질문이 넓은 규칙에 먼저 잡힌다.
+- **`IntentParser` 는 순수 함수로 유지한다.** 카테고리를 인자로 받으므로 DB 없이 테스트되고,
+  넘기는 목록이 인증 사용자의 것뿐이라 소유권 검증이 함께 따라온다.
 - **가져오기는 UTF-8 을 `CodingErrorAction.REPORT` 로 시도하고 실패 시 MS949 로 폴백한다.** 기본값 `REPLACE` 로 두면 예외가 나지 않아 폴백이 영영 동작하지 않는다.
 
 ---
@@ -150,9 +159,10 @@ CategoryApiTest              CategoryRepositoryTest
 TransactionApiTest           TransactionRepositoryTest
 StatsApiTest                 ForecastCalculatorTest        RecurringDetectorTest
 BudgetApiTest                DataApiTest                   CsvParserTest
+ChatApiTest                  IntentParserTest
 ```
 
-예측 계산과 CSV 파서는 DB 없이 입력→출력만 보면 되므로 순수 단위 테스트다.
+예측 계산·CSV 파서·챗봇 의도 파서는 DB 없이 입력→출력만 보면 되므로 순수 단위 테스트다.
 
 ---
 
