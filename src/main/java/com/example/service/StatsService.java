@@ -64,7 +64,9 @@ public class StatsService {
         int daysElapsed = ForecastCalculator.daysElapsed(target, asOf);
 
         Summary summary = buildSummary(userId, monthStart, monthEnd);
-        List<CategorySum> categorySums = statsRepository.sumExpenseByCategory(userId, monthStart, monthEnd);
+        // 대시보드의 byCategory 는 지금까지도 지출만이었다. 동작은 바뀌지 않는다.
+        List<CategorySum> categorySums =
+                statsRepository.sumByCategoryAndType(userId, monthStart, monthEnd, TransactionType.EXPENSE);
 
         return new MonthlyStatsResponse(
                 target.toString(),
