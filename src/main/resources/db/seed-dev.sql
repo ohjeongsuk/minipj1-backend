@@ -63,7 +63,7 @@ INSERT INTO transactions
     (user_id, category_id, type, amount, txn_date, merchant, memo, created_at, updated_at)
 SELECT u.id, c.id, 'INCOME', 3200000.00,
        (date_trunc('month', CURRENT_DATE) - (m || ' month')::interval)::date + 24,
-       '(주)머니로그', '월급',
+       '(주)잔고', '월급',
        now() AT TIME ZONE 'UTC', now() AT TIME ZONE 'UTC'
 FROM users u
 JOIN categories c ON c.user_id = u.id AND c.name = '급여'

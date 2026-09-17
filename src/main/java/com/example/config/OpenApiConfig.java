@@ -30,7 +30,7 @@ public class OpenApiConfig {
     public OpenAPI openAPI() {
         return new OpenAPI()
                 .info(new Info()
-                        .title("MoneyLog API")
+                        .title("Zango API")
                         .description("데이터 예측 기반 개인용 스마트 가계부")
                         .version("v1"))
                 // 전역 적용 — 컨트롤러마다 @SecurityRequirement 를 붙이지 않아도 된다
