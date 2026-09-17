@@ -156,7 +156,7 @@ class ChatApiTest extends ApiTestSupport {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.intent").value("UNKNOWN"))
                 .andExpect(jsonPath("$.data.yearMonth").doesNotExist())
-                .andExpect(jsonPath("$.data.suggestions.length()").value(3));
+                .andExpect(jsonPath("$.data.suggestions.length()").value(4));
     }
 
     @Test
@@ -185,6 +185,103 @@ class ChatApiTest extends ApiTestSupport {
                         org.hamcrest.Matchers.containsString("기록이 없어요")));
     }
 
+
+    // ---------- 2단계 의도 ----------
+
+    @Test
+    @DisplayName("예측: 직전 3개월 기록이 없으면 예측하지 않는다고 답한다")
+    void 예측_데이터_부족() throws Exception {
+        txn(foodId, "EXPENSE", "10000", "2026-09-10");
+
+        mockMvc.perform(ask("이 속도면 얼마 쓸까?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("FORECAST"))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("데이터가 조금 더 필요해요")));
+    }
+
+    @Test
+    @DisplayName("예측: 기준선이 있으면 예상 지출을 문장으로 준다")
+    void 예측_정상() throws Exception {
+        // 직전 3개월(6~8월)에 기록을 심는다
+        txn(foodId, "EXPENSE", "300000", "2026-06-15");
+        txn(foodId, "EXPENSE", "300000", "2026-07-15");
+        txn(foodId, "EXPENSE", "300000", "2026-08-15");
+        txn(foodId, "EXPENSE", "100000", "2026-09-10");
+
+        mockMvc.perform(ask("이번달 예상 지출 얼마야"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("FORECAST"))
+                .andExpect(jsonPath("$.data.yearMonth").value("2026-09"))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("이 속도면")));
+    }
+
+    @Test
+    @DisplayName("고정지출: 없으면 조건을 알려준다")
+    void 고정지출_없음() throws Exception {
+        mockMvc.perform(ask("고정지출 뭐 있어?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("RECURRING"))
+                // 대상 월이 없는 계산이라 특정 달의 값처럼 보이면 안 된다
+                .andExpect(jsonPath("$.data.yearMonth").doesNotExist())
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("아직 없어요")));
+    }
+
+    @Test
+    @DisplayName("고정지출: 같은 상호가 석 달 이어지면 찾아낸다")
+    void 고정지출_감지() throws Exception {
+        txn(foodId, "EXPENSE", "17000", "2026-06-05", "넷플릭스");
+        txn(foodId, "EXPENSE", "17000", "2026-07-05", "넷플릭스");
+        txn(foodId, "EXPENSE", "17000", "2026-08-05", "넷플릭스");
+
+        mockMvc.perform(ask("고정지출 뭐 있어?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("RECURRING"))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("넷플릭스")))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("17,000원")));
+    }
+
+    @Test
+    @DisplayName("일별: 특정 날짜의 금액을 준다")
+    void 일별_정상() throws Exception {
+        txn(foodId, "EXPENSE", "32000", "2026-09-15");
+
+        mockMvc.perform(ask("15일 얼마 썼어?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("DAILY_AMOUNT"))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("9월 15일")))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("32,000원")));
+    }
+
+    @Test
+    @DisplayName("일별: 기록이 없는 날은 없다고 답한다")
+    void 일별_빈날() throws Exception {
+        mockMvc.perform(ask("15일 얼마 썼어?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("기록이 없어요")));
+    }
+
+    @Test
+    @DisplayName("일별 + 카테고리: 0원이라 하지 않고 한계를 밝힌 뒤 그날 전체를 준다")
+    void 일별_카테고리_한계() throws Exception {
+        txn(foodId, "EXPENSE", "32000", "2026-09-15");
+
+        mockMvc.perform(ask("15일 식비 얼마 썼어?"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.intent").value("DAILY_AMOUNT"))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("카테고리를 나눠서 보여드릴 수 없어요")))
+                .andExpect(jsonPath("$.data.answer").value(
+                        org.hamcrest.Matchers.containsString("32,000원")));
+    }
+
     // ---------- 헬퍼 ----------
 
     private MockHttpServletRequestBuilder ask(String message) {
@@ -194,10 +291,16 @@ class ChatApiTest extends ApiTestSupport {
     }
 
     private void txn(long categoryId, String type, String amount, String date) throws Exception {
+        txn(categoryId, type, amount, date, null);
+    }
+
+    private void txn(long categoryId, String type, String amount, String date, String merchant)
+            throws Exception {
+        String merchantJson = merchant == null ? "null" : "\"" + merchant + "\"";
         mockMvc.perform(post(TRANSACTIONS).header("Authorization", auth)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"categoryId\":%d,\"type\":\"%s\",\"amount\":%s,\"txnDate\":\"%s\"}"
-                                .formatted(categoryId, type, amount, date)))
+                        .content("{\"categoryId\":%d,\"type\":\"%s\",\"amount\":%s,\"txnDate\":\"%s\",\"merchant\":%s}"
+                                .formatted(categoryId, type, amount, date, merchantJson)))
                 .andExpect(status().isCreated());
     }
 
