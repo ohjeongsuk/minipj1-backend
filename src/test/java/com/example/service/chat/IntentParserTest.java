@@ -172,4 +172,110 @@ class IntentParserTest {
             assertThat(parse("최근 내역 보여줘").txnType()).isNull();
         }
     }
+
+    @Nested
+    @DisplayName("2단계 의도")
+    class Phase2 {
+
+        @Test
+        @DisplayName("고정지출은 대상 월을 잡지 않는다")
+        void recurring() {
+            Intent intent = parse("고정지출 뭐 있어?");
+            assertThat(intent.type()).isEqualTo(IntentType.RECURRING);
+            assertThat(intent.yearMonth()).isNull();
+        }
+
+        @Test
+        @DisplayName("'구독' 도 고정지출로 본다")
+        void recurringSynonym() {
+            assertThat(parse("구독 결제 뭐 있어").type()).isEqualTo(IntentType.RECURRING);
+        }
+
+        @Test
+        @DisplayName("'고정지출' 이 '지출' 보다 먼저다")
+        void recurringBeatsSummary() {
+            // "지출" 은 월 요약 어휘이기도 하다. 순서가 뒤집히면 여기서 새어 나간다
+            assertThat(parse("이번달 고정지출 얼마야").type()).isEqualTo(IntentType.RECURRING);
+        }
+
+        @Test
+        @DisplayName("예상 지출은 FORECAST 다")
+        void forecast() {
+            Intent intent = parse("이 속도면 얼마 쓸까?");
+            assertThat(intent.type()).isEqualTo(IntentType.FORECAST);
+            assertThat(intent.yearMonth()).isEqualTo(YearMonth.of(2026, 9));
+        }
+
+        @Test
+        @DisplayName("'예상' 이 '지출·얼마' 보다 먼저다")
+        void forecastBeatsSummary() {
+            assertThat(parse("이번달 예상 지출 얼마야").type()).isEqualTo(IntentType.FORECAST);
+        }
+
+        @Test
+        @DisplayName("'예산' 과 '예상' 을 헷갈리지 않는다")
+        void budgetIsNotForecast() {
+            assertThat(parse("예산 얼마야").type()).isEqualTo(IntentType.BUDGET_STATUS);
+            assertThat(parse("예상 얼마야").type()).isEqualTo(IntentType.FORECAST);
+        }
+
+        @Test
+        @DisplayName("'오늘' 은 asOf 다")
+        void today() {
+            Intent intent = parse("오늘 얼마 썼어?");
+            assertThat(intent.type()).isEqualTo(IntentType.DAILY_AMOUNT);
+            assertThat(intent.date()).isEqualTo(AS_OF);
+        }
+
+        @Test
+        @DisplayName("'어제' 는 asOf 하루 전이다")
+        void yesterday() {
+            assertThat(parse("어제 얼마 썼어?").date()).isEqualTo(LocalDate.of(2026, 9, 16));
+        }
+
+        @Test
+        @DisplayName("'15일' 은 대상 월의 그 날이다")
+        void explicitDay() {
+            assertThat(parse("15일 얼마 썼어?").date()).isEqualTo(LocalDate.of(2026, 9, 15));
+        }
+
+        @Test
+        @DisplayName("'8월 3일' 은 달과 날을 함께 읽는다")
+        void monthAndDay() {
+            Intent intent = parse("8월 3일 얼마 썼어?");
+            assertThat(intent.date()).isEqualTo(LocalDate.of(2026, 8, 3));
+            assertThat(intent.yearMonth()).isEqualTo(YearMonth.of(2026, 8));
+        }
+
+        @Test
+        @DisplayName("달을 넘어가는 '어제' 는 대상 월도 함께 넘어간다")
+        void yesterdayCrossesMonth() {
+            // 9월 1일의 어제는 8월 31일이다. 대상 월이 9월로 남으면
+            // 일별 배열에서 그 날짜를 못 찾는다
+            Intent intent = IntentParser.parse("어제 얼마 썼어?", LocalDate.of(2026, 9, 1), CATEGORIES);
+            assertThat(intent.date()).isEqualTo(LocalDate.of(2026, 8, 31));
+            assertThat(intent.yearMonth()).isEqualTo(YearMonth.of(2026, 8));
+        }
+
+        @Test
+        @DisplayName("없는 날짜(2월 31일)는 날짜로 읽지 않는다")
+        void invalidDay() {
+            Intent intent = IntentParser.parse("2월 31일 얼마 썼어?", AS_OF, CATEGORIES);
+            assertThat(intent.type()).isNotEqualTo(IntentType.DAILY_AMOUNT);
+        }
+
+        @Test
+        @DisplayName("날짜와 카테고리가 함께 있으면 날짜를 우선하고 카테고리도 담는다")
+        void dayWithCategory() {
+            Intent intent = parse("어제 식비 얼마 썼어?");
+            assertThat(intent.type()).isEqualTo(IntentType.DAILY_AMOUNT);
+            assertThat(intent.categoryName()).isEqualTo("식비");
+        }
+
+        @Test
+        @DisplayName("'10건' 은 날짜가 아니다")
+        void countIsNotADay() {
+            assertThat(parse("내역 10건 보여줘").type()).isEqualTo(IntentType.RECENT_TRANSACTIONS);
+        }
+    }
 }

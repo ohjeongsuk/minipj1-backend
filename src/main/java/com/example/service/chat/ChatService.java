@@ -18,6 +18,9 @@ import com.example.dto.ChatResponse;
 import com.example.dto.MonthlyStatsResponse;
 import com.example.dto.MonthlyStatsResponse.BudgetStat;
 import com.example.dto.MonthlyStatsResponse.CategoryStat;
+import com.example.dto.MonthlyStatsResponse.DailyStat;
+import com.example.dto.MonthlyStatsResponse.Forecast;
+import com.example.dto.RecurringResponse;
 import com.example.dto.TransactionResponse;
 import com.example.service.CategoryService;
 import com.example.service.StatsService;
@@ -37,10 +40,14 @@ import com.example.service.TransactionService;
 @Service
 public class ChatService {
 
+    /** 고정지출 목록을 문장에 몇 개까지 나열할지. 넘으면 "외 N건" 으로 줄인다 */
+    private static final int RECURRING_SHOWN = 5;
+
     private static final List<String> SUGGESTIONS = List.of(
             "이번달 얼마 썼어?",
             "지난달 식비 얼마 썼어?",
-            "최근 지출 보여줘");
+            "최근 지출 보여줘",
+            "고정지출 뭐 있어?");
 
     private final StatsService statsService;
     private final TransactionService transactionService;
@@ -67,6 +74,9 @@ public class ChatService {
             case CATEGORY_AMOUNT -> categoryAmount(userId, intent, asOf);
             case BUDGET_STATUS -> budgetStatus(userId, intent, asOf);
             case RECENT_TRANSACTIONS -> recentTransactions(userId, intent);
+            case FORECAST -> forecast(userId, intent, asOf);
+            case RECURRING -> recurring(userId, asOf);
+            case DAILY_AMOUNT -> dailyAmount(userId, intent, asOf);
             case UNKNOWN -> unknown();
         };
     }
@@ -155,6 +165,88 @@ public class ChatService {
         }
         return new ChatResponse(intent.type(), "최근 %d건이에요.".formatted(rows.size()),
                 yearMonthOf(intent), rows, List.of());
+    }
+
+    /**
+     * 이번 달 예상 지출(런레이트).
+     *
+     * 수식은 백엔드의 ForecastCalculator 한 곳에만 있다. 여기서 다시 계산하면
+     * 대시보드의 "이 속도면" 카드와 챗봇이 다른 숫자를 말한다.
+     */
+    private ChatResponse forecast(Long userId, Intent intent, LocalDate asOf) {
+        MonthlyStatsResponse stats = statsService.monthly(userId, intent.yearMonth(), asOf);
+        Forecast f = stats.forecast();
+        int month = intent.yearMonth().getMonthValue();
+
+        // 직전 3개월에 거래가 없으면 서버가 forecast 를 null 로 준다
+        if (f == null) {
+            return answer(intent, "예측하려면 데이터가 조금 더 필요해요. 최근 3개월 기록이 있어야 해요.");
+        }
+        // 이미 끝난 달은 "예상" 이 의미가 없다. 서버가 남은 일수를 0 으로 잡아
+        // 예상액이 확정액과 같아지는데, 그대로 "쓰게 돼요" 라고 하면 미래처럼 읽힌다
+        if (f.daysElapsed() >= f.daysInMonth()) {
+            return answer(intent, "%d월은 이미 지난 달이라 예측하지 않아요. 지출은 %s이었어요."
+                    .formatted(month, won(f.confirmedExpense())));
+        }
+        return answer(intent, "이 속도면 %d월에 %s을 쓰게 돼요. 지금까지 %s 썼고, 최근 %d개월 기준 하루 평균 %s이에요."
+                .formatted(month, won(f.projectedExpense()), won(f.confirmedExpense()),
+                        f.basisMonths(), won(f.baselineDailyAvg())));
+    }
+
+    /**
+     * 고정지출 감지.
+     *
+     * ⚠️ 대상 월이 없다. asOf 기준 직전 3개월 + 당월을 스캔하는 별도 계산이라
+     *    응답의 yearMonth 를 null 로 둔다. 특정 달의 값처럼 보이면 안 된다.
+     */
+    private ChatResponse recurring(Long userId, LocalDate asOf) {
+        List<RecurringResponse> found = statsService.recurring(userId, asOf);
+
+        if (found.isEmpty()) {
+            return new ChatResponse(IntentType.RECURRING,
+                    "고정지출로 볼 만한 게 아직 없어요. 같은 곳에서 비슷한 금액이 석 달 이상 나가야 찾아낼 수 있어요.",
+                    null, null, List.of());
+        }
+        String list = found.stream()
+                .limit(RECURRING_SHOWN)
+                .map(r -> "%s %s".formatted(r.merchant(), won(r.medianAmount())))
+                .collect(java.util.stream.Collectors.joining(", "));
+        String more = found.size() > RECURRING_SHOWN
+                ? " 외 %d건".formatted(found.size() - RECURRING_SHOWN)
+                : "";
+        return new ChatResponse(IntentType.RECURRING,
+                "고정지출로 보이는 게 %d건 있어요. %s%s".formatted(found.size(), list, more),
+                null, null, List.of());
+    }
+
+    /**
+     * 특정 하루의 금액.
+     *
+     * ⚠️ daily 배열에는 카테고리 구분이 없다. 날짜와 카테고리를 함께 물으면
+     *    그날 전체를 답하되 그 사실을 문장에 밝힌다. 카테고리 월 합계를
+     *    그날 것처럼 보여주는 것이 가장 나쁜 실패다.
+     */
+    private ChatResponse dailyAmount(Long userId, Intent intent, LocalDate asOf) {
+        MonthlyStatsResponse stats = statsService.monthly(userId, intent.yearMonth(), asOf);
+        LocalDate target = intent.date();
+        DailyStat day = stats.daily().stream()
+                .filter(d -> d.date().equals(target))
+                .findFirst()
+                .orElse(null);
+
+        String head = intent.categoryName() == null
+                ? ""
+                : "날짜별 금액은 카테고리를 나눠서 보여드릴 수 없어요. ";
+        String when = "%d월 %d일".formatted(target.getMonthValue(), target.getDayOfMonth());
+
+        if (day == null || (isZero(day.expense()) && isZero(day.income()))) {
+            return answer(intent, head + "%s에는 기록이 없어요.".formatted(when));
+        }
+        if (isZero(day.income())) {
+            return answer(intent, head + "%s 지출은 %s이에요.".formatted(when, won(day.expense())));
+        }
+        return answer(intent, head + "%s 지출은 %s, 수입은 %s이에요."
+                .formatted(when, won(day.expense()), won(day.income())));
     }
 
     private ChatResponse unknown() {
