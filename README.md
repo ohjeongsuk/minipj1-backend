@@ -1,6 +1,6 @@
 # minipj1-backend
 
-머니로그(MoneyLog) 백엔드. **Spring Boot 4.1.1 + JDK 21 + PostgreSQL** REST API.
+잔고(Zango) 백엔드. **Spring Boot 4.1.1 + JDK 21 + PostgreSQL** REST API.
 
 > 전체 스펙의 정본은 문서 저장소 `mini-project/CLAUDE.md` 다.
 > 이 저장소 전용 규칙은 `CLAUDE.md`(같은 폴더)에 있다.
