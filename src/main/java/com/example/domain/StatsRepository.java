@@ -43,7 +43,13 @@ public interface StatsRepository extends Repository<Transaction, Long> {
                             @Param("from") LocalDate from,
                             @Param("to") LocalDate to);
 
-    /** 카테고리별 지출 — 삭제된 카테고리도 포함한다 */
+    /**
+     * 카테고리별 합계 — 삭제된 카테고리도 포함한다.
+     *
+     * ⚠️ 거래 종류를 JPQL 에 상수로 박아두지 않는다. 박아두면 수입 조회를 위해
+     *    같은 쿼리를 한 벌 더 만들게 되고, 그러면 coalesce·삭제 카테고리 처리 같은
+     *    수정이 언젠가 한쪽에만 적용된다. 바뀌는 것이 상수 하나뿐이면 파라미터로 만든다.
+     */
     @Query("""
             select new com.example.domain.StatsProjections$CategorySum(
                        c.id, c.name, c.color,
@@ -53,14 +59,15 @@ public interface StatsRepository extends Repository<Transaction, Long> {
             join t.category c
             where t.user.id = :userId
               and t.deletedAt is null
-              and t.type = com.example.domain.TransactionType.EXPENSE
+              and t.type = :type
               and t.txnDate between :from and :to
             group by c.id, c.name, c.color, c.deletedAt
             order by sum(t.amount) desc
             """)
-    List<CategorySum> sumExpenseByCategory(@Param("userId") Long userId,
+    List<CategorySum> sumByCategoryAndType(@Param("userId") Long userId,
                                            @Param("from") LocalDate from,
-                                           @Param("to") LocalDate to);
+                                           @Param("to") LocalDate to,
+                                           @Param("type") TransactionType type);
 
     /** 일별 수입·지출 */
     @Query("""
