@@ -21,11 +21,6 @@ spring:
         format_sql: true
     open-in-view: false
 
-  # flyway-core 가 클래스패스에 있어 자동 구성되지만,
-  # 이 프로젝트의 스키마 소유권은 ddl-auto + db/schema-extra.sql 에 있다. 둘이 충돌하므로 끈다.
-  flyway:
-    enabled: false
-
   servlet:
     multipart:
       # CSV 업로드 상한 (Phase 6 대비). 기본값 1MB 라 명시하지 않으면 조용히 413 이 날 수 있다.

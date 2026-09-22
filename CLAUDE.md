@@ -50,8 +50,8 @@ cp .env.example .env    # 값을 채운다. .env 는 커밋되지 않는다
 | test | `create-drop` | `miniproject1_test` |
 
 - **`application.properties`를 만들지 않는다.** `.yml`과 공존하면 `.yml` 설정이 조용히 무시된다.
-- **`spring.flyway.enabled: false`를 유지한다.** `flyway-core`가 클래스패스에 있어 자동 구성되는데,
-  이 프로젝트의 스키마 소유권은 `ddl-auto` + `db/schema-extra.sql`에 있다. 켜면 둘이 충돌한다.
+- **Flyway는 쓰지 않는다.** 스키마 소유권은 `ddl-auto` + `db/schema-extra.sql`에 있다. `flyway-core`를
+  의존성에 추가하면 자동 구성되어 위와 충돌하므로 추가하지 않는다.
 
 ---
 
